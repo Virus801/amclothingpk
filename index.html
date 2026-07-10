@@ -319,6 +319,7 @@ footer .col a:hover{color:var(--blood);}
 .ebtn.reject{border-color:#550;color:#cc8800;} .ebtn.reject:hover{background:#550;color:#ff0;}
 .ebtn.featured{border-color:#550;color:#cc8800;} .ebtn.featured:hover{background:#550;color:#ff0;}
 .ebtn.featured.on{background:#cc8800;color:#000;border-color:#cc8800;}
+.ebtn.wa{border-color:#25d366;color:#25d366;} .ebtn.wa:hover{background:#25d366;color:#fff;}
 .ebtn:disabled{opacity:0.3;cursor:default;}
 .ebtn.move{color:var(--accent-bright);border-color:var(--accent-bright);font-size:.65rem;padding:3px 8px;}
 .ebtn.move:hover{background:var(--accent);color:#fff;}
@@ -558,6 +559,7 @@ window.onerror = function(msg, url, line){
 <div style="border-top:1px solid var(--line);padding-top:24px;margin-top:24px;"><h4 style="font-family:var(--font-mono);font-size:.72rem;text-transform:uppercase;color:var(--muted);margin-bottom:16px;">Email</h4>
 <div class="field"><label>Public Key</label><input type="text" id="setEmailKey"></div><div class="field"><label>Service ID</label><input type="text" id="setEmailService"></div><div class="field"><label>Template ID</label><input type="text" id="setEmailTemplate"></div><div class="field"><label>Admin Email</label><input type="email" id="setAdminEmail"></div>
 <button class="add-new-btn" onclick="testEmail()">Send Test</button></div>
+<div style="border-top:1px solid var(--line);padding-top:24px;margin-top:24px;"><h4 style="font-family:var(--font-mono);font-size:.72rem;text-transform:uppercase;color:var(--muted);margin-bottom:16px;">Order Notification Sound</h4><div class="field-row"><div class="field"><label>Sound</label><select id="setNotifSound"><option value="chime">Chime (Default)</option><option value="single">Single Beep</option><option value="triple">Triple Beep</option><option value="descend">Descending</option><option value="alarm">Alarm</option></select></div><div class="field" style="flex:0;"><label>&nbsp;</label><button class="add-new-btn" onclick="previewNotifSound()" style="margin-top:6px;">Preview</button></div></div></div>
 <button class="save-btn" onclick="saveSettings()" style="width:100%;margin-top:16px;">Save Settings</button></div></div></div></div>
 <div class="edit-overlay" id="editOverlay" onclick="if(event.target===this)closeEditModal()"><div class="edit-modal"><div class="edit-head"><h3 id="editTitle">Edit</h3><span class="edit-close" onclick="closeEditModal()">&times;</span></div><div class="edit-body" id="editBody"></div></div></div>
 <div class="confirm-overlay" id="confirmOverlay" onclick="if(event.target===this)closeConfirmDialog()"><div class="confirm-modal"><p id="confirmMsg"></p><div class="confirm-actions"><button class="ebtn" id="confirmCancelBtn">Cancel</button><button class="ebtn del" id="confirmOkBtn">Delete</button></div></div></div>
@@ -1061,6 +1063,106 @@ function showSync(m) {
   if(!el) return;
   el.textContent = '● ' + m;
   el.style.color = m==='SYNCED' ? '#0c6' : '#cc8800';
+}
+
+/* ORDER NOTIFICATION */
+var notifiedOrders = {};
+var orderPollTimer = null;
+function restoreNotifiedOrders() {
+  try { var d = JSON.parse(sessionStorage.getItem('am_notified')||'{}'); notifiedOrders = d; } catch(e) { notifiedOrders = {}; }
+}
+function saveNotifiedOrders() {
+  try { sessionStorage.setItem('am_notified', JSON.stringify(notifiedOrders)); } catch(e) {}
+}
+function playNotificationSound() {
+  var s = (settings.notifSound||'chime');
+  try { var ctx = new (window.AudioContext||window.webkitAudioContext)();
+    if(s==='chime'||s==='default') {
+      var o1=ctx.createOscillator(),g1=ctx.createGain(); o1.connect(g1); g1.connect(ctx.destination);
+      o1.type='sine'; o1.frequency.value=880; g1.gain.setValueAtTime(0.3,ctx.currentTime);
+      g1.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.4);
+      o1.start(ctx.currentTime); o1.stop(ctx.currentTime+0.4);
+      setTimeout(function(){try{var o2=ctx.createOscillator(),g2=ctx.createGain(); o2.connect(g2); g2.connect(ctx.destination);
+        o2.type='sine'; o2.frequency.value=1320; g2.gain.setValueAtTime(0.3,ctx.currentTime);
+        g2.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.5);
+        o2.start(ctx.currentTime); o2.stop(ctx.currentTime+0.5);}catch(e){}},200);
+    } else if(s==='single') {
+      var o=ctx.createOscillator(),g=ctx.createGain(); o.connect(g); g.connect(ctx.destination);
+      o.type='sine'; o.frequency.value=1000; g.gain.setValueAtTime(0.3,ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.2);
+      o.start(ctx.currentTime); o.stop(ctx.currentTime+0.2);
+    } else if(s==='triple') {
+      [660,880,1100].forEach(function(f,i){setTimeout(function(){try{var o=ctx.createOscillator(),g=ctx.createGain(); o.connect(g); g.connect(ctx.destination);
+        o.type='sine'; o.frequency.value=f; g.gain.setValueAtTime(0.25,ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.15);
+        o.start(ctx.currentTime); o.stop(ctx.currentTime+0.15);}catch(e){}},i*180);});
+    } else if(s==='descend') {
+      var o1=ctx.createOscillator(),g1=ctx.createGain(); o1.connect(g1); g1.connect(ctx.destination);
+      o1.type='sine'; o1.frequency.value=880; g1.gain.setValueAtTime(0.3,ctx.currentTime);
+      g1.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.3);
+      o1.start(ctx.currentTime); o1.stop(ctx.currentTime+0.3);
+      setTimeout(function(){try{var o2=ctx.createOscillator(),g2=ctx.createGain(); o2.connect(g2); g2.connect(ctx.destination);
+        o2.type='sine'; o2.frequency.value=660; g2.gain.setValueAtTime(0.3,ctx.currentTime);
+        g2.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.4);
+        o2.start(ctx.currentTime); o2.stop(ctx.currentTime+0.4);}catch(e){}},250);
+    } else if(s==='alarm') {
+      for(var i=0;i<3;i++){setTimeout(function(){try{var o=ctx.createOscillator(),g=ctx.createGain(); o.connect(g); g.connect(ctx.destination);
+        o.type='square'; o.frequency.value=800; g.gain.setValueAtTime(0.2,ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.1);
+        o.start(ctx.currentTime); o.stop(ctx.currentTime+0.1);}catch(e){}},i*150);}
+    }
+  } catch(e) {}
+}
+function previewNotifSound() {
+  settings.notifSound=document.getElementById('setNotifSound').value||'chime';
+  playNotificationSound();
+}
+function sendBrowserNotif(title, body) {
+  try {
+    if(typeof Notification==='undefined') return;
+    if(Notification.permission==='granted') new Notification(title, {body:body});
+    else if(Notification.permission==='default') Notification.requestPermission();
+  } catch(e) { console.log('[AM] Notif error:', e); }
+  try { navigator.vibrate(200); } catch(e) {}
+}
+function checkNewOrders() {
+  if(!sb) return;
+  sb.from('orders').select('order_id,status').order('created_at',{ascending:false}).limit(20).then(function(r) {
+    if(!r.data||!r.data.length) return;
+    r.data.forEach(function(o) {
+      if(!notifiedOrders[o.order_id] && o.status==='pending') {
+        notifiedOrders[o.order_id] = true;
+        showToast('New order: '+o.order_id);
+        playNotificationSound();
+        sendBrowserNotif('New Order!', o.order_id);
+      }
+    });
+    saveNotifiedOrders();
+  }).catch(function(e){});
+}
+function startOrderPolling() {
+  stopOrderPolling();
+  restoreNotifiedOrders();
+  if(typeof Notification!=='undefined' && Notification.permission==='default') Notification.requestPermission();
+  if(!sb) return;
+  var prevCount = Object.keys(notifiedOrders).length;
+  sb.from('orders').select('order_id,status').then(function(r) {
+    if(r.data) {
+      var missed = 0;
+      r.data.forEach(function(o) {
+        if(!notifiedOrders[o.order_id] && o.status==='pending') missed++;
+        if(o.status==='pending') notifiedOrders[o.order_id] = true;
+      });
+      saveNotifiedOrders();
+      if(missed>0) showToast(missed+' new order'+(missed>1?'s':'')+' since last visit');
+      if(missed>0) { playNotificationSound(); sendBrowserNotif('Missed Orders', missed+' new order'+(missed>1?'s':'')+' since last visit'); }
+    }
+    checkNewOrders();
+    orderPollTimer = setInterval(checkNewOrders, 5000);
+  }).catch(function(){});
+}
+function stopOrderPolling() {
+  if(orderPollTimer) { clearInterval(orderPollTimer); orderPollTimer = null; }
 }
 
 /* LOAD DATA */
@@ -1888,7 +1990,7 @@ function attemptLogin() {
   if(us===devUser && pw===devPassword) ok = true;
   else if(pw===backupCode) ok = true;
   else if(us===(settings.adminUser||'admin').toLowerCase() && pw===settings.password) ok = true;
-  if(ok) { closeAdminLogin(); openAdminDash(); setAdminSession(); }
+  if(ok) { if(typeof Notification!=='undefined' && Notification.permission==='default') Notification.requestPermission(); closeAdminLogin(); openAdminDash(); setAdminSession(); }
   else document.getElementById('loginError').style.display='block';
 }
 
@@ -1957,9 +2059,9 @@ function verifyAdminResetCode() {
 }
 function setAdminSession() { window.adminLoggedIn = true; sessionStorage.setItem('adminLoggedIn','true'); }
 function clearAdminSession() { window.adminLoggedIn = false; sessionStorage.removeItem('adminLoggedIn'); }
-function adminLogout() { clearAdminSession(); document.getElementById('adminDash').classList.remove('open'); document.body.style.overflow=''; }
-function openAdminDash() { sessionStorage.setItem('adminDashOpen','true'); history.pushState(null,''); document.getElementById('adminDash').classList.add('open'); document.body.style.overflow='hidden'; renderAdminDash(); }
-function closeAdminDash() { sessionStorage.removeItem('adminDashOpen'); document.getElementById('adminDash').classList.remove('open'); document.body.style.overflow=''; loadAllData(); }
+function adminLogout() { clearAdminSession(); stopOrderPolling(); document.getElementById('adminDash').classList.remove('open'); document.body.style.overflow=''; }
+function openAdminDash() { sessionStorage.setItem('adminDashOpen','true'); history.pushState(null,''); document.getElementById('adminDash').classList.add('open'); document.body.style.overflow='hidden'; renderAdminDash(); startOrderPolling(); }
+function closeAdminDash() { sessionStorage.removeItem('adminDashOpen'); document.getElementById('adminDash').classList.remove('open'); document.body.style.overflow=''; loadAllData(); stopOrderPolling(); }
 function adminRestoreSession() { if(window.adminLoggedIn && sessionStorage.getItem('adminDashOpen')==='true') { openAdminDash(); } }
 
 function switchAdminTab(tab, btn) {
@@ -2126,6 +2228,9 @@ function renderOrdersTable() {
     if(o.status!=='delivered') actions+='<button class="ebtn done" onclick="updateOrderStatus(\''+o.docId+'\',\'delivered\')">✓</button>';
     if(o.status!=='rejected') actions+='<button class="ebtn reject" onclick="updateOrderStatus(\''+o.docId+'\',\'rejected\')">✕</button>';
     if(o.status!=='pending') actions+='<button class="ebtn edit" onclick="updateOrderStatus(\''+o.docId+'\',\'pending\')">↩</button>';
+    var waPhone = (cust.phone||'').replace(/[^0-9]/g,'');
+    var waMsg = encodeURIComponent('Order '+o.id+': '+o.itemsList+'%0aTotal: '+cur+' '+Number(o.total||0).toLocaleString()+'%0aCustomer: '+(cust.name||'')+'%0aPhone: '+(cust.phone||'')+'%0aAddress: '+(cust.address||'')+', '+(cust.city||''));
+    if(waPhone) actions+='<a href="https://wa.me/'+waPhone+'?text='+waMsg+'" target="_blank" class="ebtn wa">WA</a>';
     actions+='<button class="ebtn del" onclick="deleteOrder(\''+o.docId+'\')">DEL</button>';
     return '<tr><td style="color:var(--ink);font-weight:600;">'+o.id+'</td><td>'+(cust.name||'—')+'</td><td>'+(cust.phone||'—')+'</td><td>'+(cust.altPhone||'—')+'</td><td>'+(cust.email||'—')+'</td><td>'+(cust.city||'—')+'</td><td>'+(cust.house||'—')+'</td><td style="max-width:80px;font-size:.6rem;">'+(cust.address||'—')+'</td><td>'+(cust.postal||'—')+'</td><td style="max-width:100px;font-size:.6rem;">'+(o.itemsList||'—')+'</td><td>'+(df>0?cur+' '+df.toLocaleString():'—')+'</td><td style="color:var(--blood);font-weight:600;">'+cur+' '+Number(o.total||0).toLocaleString()+'</td><td><span class="badge '+o.status+'">'+o.status+'</span></td><td>'+d+'</td><td><div class="action-btns">'+actions+'</div></td></tr>';
   }).join('');
@@ -2699,6 +2804,7 @@ function renderSettings() {
   document.getElementById('setLogoText').value=settings.logoText||'AM.';
   document.getElementById('setLogoSrc').value=settings.logoSrc||'';
   document.getElementById('setLogoSrcInput').value=settings.logoSrc||'';
+  document.getElementById('setNotifSound').value=settings.notifSound||'chime';
   renderCatManager();
 }
 
@@ -2742,6 +2848,7 @@ function saveSettings() {
   settings.logoMode=document.getElementById('setLogoMode').value||'text';
   settings.logoText=document.getElementById('setLogoText').value.trim()||'AM.';
   settings.logoSrc=document.getElementById('setLogoSrcInput').value.trim()||'';
+  settings.notifSound=document.getElementById('setNotifSound').value||'chime';
   showSync('SAVING...');
   Promise.all([saveConfig('settings',settings), saveConfig('categories',categories)]).then(function() {
     showSync('SYNCED');
