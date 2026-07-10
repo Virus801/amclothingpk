@@ -556,9 +556,11 @@ window.onerror = function(msg, url, line){
 <div style="border-top:1px solid var(--line);padding-top:24px;margin-top:24px;"><h4 style="font-family:var(--font-mono);font-size:.72rem;text-transform:uppercase;color:var(--muted);margin-bottom:16px;">Delivery</h4><div class="field-row"><div class="field"><label>Karachi</label><input type="number" id="setKarachiFee" min="0"></div><div class="field"><label>Other</label><input type="number" id="setOtherFee" min="0"></div></div><div class="field-row"><div class="field"><label>Free Delivery</label><select id="setFreeDelivery"><option value="false">Off</option><option value="true">On</option></select></div><div class="field"><label>Min</label><input type="number" id="setFreeDeliveryMin" min="0"></div></div></div>
 <div style="border-top:1px solid var(--line);padding-top:24px;margin-top:24px;"><h4 style="font-family:var(--font-mono);font-size:.72rem;text-transform:uppercase;color:var(--muted);margin-bottom:16px;">Branding</h4><div class="field-row"><div class="field"><label>Logo Mode</label><select id="setLogoMode"><option value="text">Text</option><option value="image">Image</option></select></div><div class="field"><label>Logo Text</label><input type="text" id="setLogoText" placeholder="AM."></div></div><div class="field"><label>Logo Image</label><div class="img-upload-area"><input type="file" accept="image/*" onchange="handleLogoSrcUpload(event)"><div style="font-size:1.2rem;color:var(--accent-bright);">&#9650;</div><div style="font-family:var(--font-mono);font-size:.72rem;color:var(--muted);">Upload logo</div><div class="up-progress" id="logoProgress">0%</div></div><input type="hidden" id="setLogoSrc"><div style="margin-top:8px;"><label>Or Image URL</label><input type="text" id="setLogoSrcInput" placeholder="https://res.cloudinary.com/..."></div></div></div>
 <div style="border-top:1px solid var(--line);padding-top:24px;margin-top:24px;"><h4 style="font-family:var(--font-mono);font-size:.72rem;text-transform:uppercase;color:var(--muted);margin-bottom:16px;">Categories</h4><div id="catManager"></div><div style="display:flex;gap:12px;margin-top:12px;"><div class="field" style="flex:1;margin-bottom:0;"><input type="text" id="newCatKey" placeholder="Key"></div><div class="field" style="flex:1;margin-bottom:0;"><input type="text" id="newCatLabel" placeholder="Label"></div><button class="add-new-btn" onclick="addCategory()">Add</button></div></div>
-<div style="border-top:1px solid var(--line);padding-top:24px;margin-top:24px;"><h4 style="font-family:var(--font-mono);font-size:.72rem;text-transform:uppercase;color:var(--muted);margin-bottom:16px;">Email</h4>
-<div class="field"><label>Public Key</label><input type="text" id="setEmailKey"></div><div class="field"><label>Service ID</label><input type="text" id="setEmailService"></div><div class="field"><label>Template ID</label><input type="text" id="setEmailTemplate"></div><div class="field"><label>Admin Email</label><input type="email" id="setAdminEmail"></div>
-<button class="add-new-btn" onclick="testEmail()">Send Test</button></div>
+<div style="border-top:1px solid var(--line);padding-top:24px;margin-top:24px;"><h4 style="font-family:var(--font-mono);font-size:.72rem;text-transform:uppercase;color:var(--muted);margin-bottom:16px;">Email (Brevo)</h4>
+<div class="field"><label>Brevo API Key</label><input type="text" id="setBrevoKey" placeholder="xkeysib-xxxx"></div>
+<div class="field-row"><div class="field"><label>From Name</label><input type="text" id="setFromName" placeholder="AMgothic"></div><div class="field"><label>From Email</label><input type="email" id="setFromEmail" placeholder="noreply@yourdomain.com"></div></div>
+<div class="field"><label>Admin Email (receive orders)</label><input type="email" id="setAdminEmail"></div>
+<button class="add-new-btn" onclick="testEmail()">Send Test</button> <span id="emailStatus" style="font-size:.65rem;color:var(--muted);font-family:var(--font-mono);"></span></div>
 <div style="border-top:1px solid var(--line);padding-top:24px;margin-top:24px;"><h4 style="font-family:var(--font-mono);font-size:.72rem;text-transform:uppercase;color:var(--muted);margin-bottom:16px;">Order Notification Sound</h4><div class="field-row"><div class="field"><label>Sound</label><select id="setNotifSound"><option value="chime">Chime (Default)</option><option value="single">Single Beep</option><option value="triple">Triple Beep</option><option value="descend">Descending</option><option value="alarm">Alarm</option></select></div><div class="field" style="flex:0;"><label>&nbsp;</label><button class="add-new-btn" onclick="previewNotifSound()" style="margin-top:6px;">Preview</button></div></div></div>
 <button class="save-btn" onclick="saveSettings()" style="width:100%;margin-top:16px;">Save Settings</button></div></div></div></div>
 <div class="edit-overlay" id="editOverlay" onclick="if(event.target===this)closeEditModal()"><div class="edit-modal"><div class="edit-head"><h3 id="editTitle">Edit</h3><span class="edit-close" onclick="closeEditModal()">&times;</span></div><div class="edit-body" id="editBody"></div></div></div>
@@ -566,7 +568,6 @@ window.onerror = function(msg, url, line){
 
 <!-- Load Supabase + EmailJS with error handlers -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="window.__libErr='supabase'"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js" onerror="window.__libErr='emailjs'"></script>
 
 <!-- MAIN APPLICATION SCRIPT -->
 <script>
@@ -594,7 +595,7 @@ var COL_OPTIONS = [1,2,3,4,5,6];
 var PLATFORM_ICONS = {whatsapp:'💬',instagram:'📷',facebook:'📘',tiktok:'🎵',twitter:'🐦',email:'✉️',phone:'📞'};
 var products = [], orders = [], customers = [], content = {};
 var currentSort = 'default';
-var settings = {password:"amgothic",adminUser:"admin",currency:"Rs.",codNote:"Cash on Delivery.",emailKey:"",emailService:"",emailTemplate:"",adminEmail:"",homepageLimit:0,deliveryFee:0,freeDelivery:false,freeDeliveryMin:3000,karachiFee:200,otherFee:350,whatsapp:"",whatsappShow:false,whatsappMsg:"Hi!",instagram:"",instagramShow:false};
+var settings = {password:"amgothic",adminUser:"admin",currency:"Rs.",codNote:"Cash on Delivery.",brevoKey:"",fromName:"AMgothic",fromEmail:"",adminEmail:"",homepageLimit:0,deliveryFee:0,freeDelivery:false,freeDeliveryMin:3000,karachiFee:200,otherFee:350,whatsapp:"",whatsappShow:false,whatsappMsg:"Hi!",instagram:"",instagramShow:false};
 var theme = {bg:"#080808",panel:"#0e0e0e",ink:"#e8e8e8",accent:"#8B0000",accentBright:"#CC0000",blood:"#FF1A1A",muted:"#5a5a58",line:"#1a1a1a",glow:"normal",headingFont:"'Archivo Black',sans-serif",bodyFont:"'Inter',sans-serif",gridDesktop:4,gridTablet:2,gridMobile:2,cardBg:"transparent",cardBorder:"none"};
 var categories = [{key:"all",label:"All"},{key:"pants",label:"Sweatpants"},{key:"shirts",label:"Tees"}];
 var deals = [];
@@ -956,17 +957,33 @@ function openAccount() {
 function closeAccount() { document.getElementById('accountOverlay').classList.remove('open'); }
 
 function sendOrderEmail(d) {
-  if(!settings.emailKey||!settings.emailService||!settings.emailTemplate||!settings.adminEmail) return;
-  try {
-    emailjs.init({publicKey:settings.emailKey});
-    emailjs.send(settings.emailService, settings.emailTemplate, {
-      to_email:settings.adminEmail, order_id:d.id, status:'New Order',
-      customer_name:d.customer.name, customer_phone:d.customer.phone,
-      customer_email:d.customer.email||'N/A',
-      customer_address:(d.customer.house?d.customer.house+', ':'')+d.customer.address+', '+d.customer.city,
-      items_list:d.itemsList, total:settings.currency+' '+Number(d.total).toLocaleString()
-    }).catch(function(e){ console.log('Email err:',e); });
-  } catch(e) { console.log('Email init err:',e); }
+  var key = settings.brevoKey || document.getElementById('setBrevoKey').value.trim();
+  var fromE = settings.fromEmail || document.getElementById('setFromEmail').value.trim();
+  var fromN = settings.fromName || document.getElementById('setFromName').value.trim() || 'AMgothic';
+  var adminTo = settings.adminEmail || document.getElementById('setAdminEmail').value.trim();
+  if(!key) { console.log('[AM] Brevo not configured'); return; }
+  if(!adminTo) { showToast('Admin email not set. Go to Settings.', 'warn'); return; }
+  var cust = d.customer||{};
+  var address = (cust.house?cust.house+', ':'')+cust.address+', '+(cust.city||'');
+  var body = 'New Order: '+d.id+'\nCustomer: '+(cust.name||'')+'\nPhone: '+(cust.phone||'')+'\nEmail: '+(cust.email||'N/A')+'\nAddress: '+address+'\n\nItems:\n'+(d.itemsList||'')+'\nDelivery Fee: '+(settings.currency||'Rs.')+' '+(d.deliveryFee||0)+'\nTotal: '+(settings.currency||'Rs.')+' '+Number(d.total||0).toLocaleString();
+  var itemsHtml = (d.itemsList||'').split(', ').map(function(i){return '<tr><td style="padding:6px 12px;border-bottom:1px solid #333;">'+i.replace(/ \(([^)]+)\) x(\d+)/,'</td><td style="padding:6px 12px;border-bottom:1px solid #333;">$1</td><td style="padding:6px 12px;border-bottom:1px solid #333;text-align:center;">$2</td><td style="padding:6px 12px;border-bottom:1px solid #333;text-align:right;">'+(settings.currency||'Rs.')+' —</td></tr>');}).join('');
+  var html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"><div style="background:#000;padding:24px;text-align:center;"><h1 style="color:#cc0000;margin:0;font-size:24px;letter-spacing:4px;">AM.</h1></div><div style="background:#111;padding:32px;border:1px solid #222;"><h2 style="color:#fff;margin:0 0 8px;font-size:18px;">New Order</h2><p style="color:#888;font-size:13px;margin:0 0 24px;">'+d.id+'</p><table style="width:100%;border-collapse:collapse;margin-bottom:20px;"><tr><td style="padding:4px 0;color:#888;font-size:12px;">Customer</td><td style="padding:4px 0;color:#fff;font-size:13px;text-align:right;">'+(cust.name||'')+'</td></tr><tr><td style="padding:4px 0;color:#888;font-size:12px;">Phone</td><td style="padding:4px 0;color:#fff;font-size:13px;text-align:right;">'+(cust.phone||'')+'</td></tr><tr><td style="padding:4px 0;color:#888;font-size:12px;">Email</td><td style="padding:4px 0;color:#fff;font-size:13px;text-align:right;">'+(cust.email||'N/A')+'</td></tr><tr><td style="padding:4px 0;color:#888;font-size:12px;">Address</td><td style="padding:4px 0;color:#fff;font-size:13px;text-align:right;">'+address+'</td></tr></table><h3 style="color:#fff;font-size:14px;margin:0 0 8px;border-bottom:1px solid #333;padding-bottom:6px;">Items</h3><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="color:#888;font-size:11px;"><th style="padding:6px 12px;text-align:left;border-bottom:1px solid #444;">Item</th><th style="padding:6px 12px;text-align:left;border-bottom:1px solid #444;">Size</th><th style="padding:6px 12px;text-align:center;border-bottom:1px solid #444;">Qty</th><th style="padding:6px 12px;text-align:right;border-bottom:1px solid #444;">Price</th></tr></thead><tbody>'+itemsHtml+'</tbody></table><div style="margin-top:20px;padding-top:16px;border-top:1px solid #333;text-align:right;"><span style="color:#888;font-size:13px;">Delivery: '+(settings.currency||'Rs.')+' '+(d.deliveryFee||0).toLocaleString()+'</span><br><span style="color:#cc0000;font-size:22px;font-weight:bold;">'+(settings.currency||'Rs.')+' '+Number(d.total||0).toLocaleString()+'</span></div></div></div>';
+  fetch('https://api.brevo.com/v3/smtp/email', {
+    method:'POST', headers:{'api-key':key,'Content-Type':'application/json'},
+    body:JSON.stringify({
+      sender:{name:fromN,email:fromE},
+      to:[{email:adminTo}],
+      subject:'New Order: '+d.id,
+      textContent:body,
+      htmlContent:html
+    })
+  }).then(function(r) {
+    if(!r.ok) r.json().then(function(j) {
+      var msg = (j&&(j.message||j.code))||'Unknown';
+      if(msg.indexOf('unauthorized')>=0||msg.indexOf('Invalid')>=0) msg='Invalid Brevo API Key.';
+      showToast('Email failed: '+msg, 'error');
+    }).catch(function() { showToast('Email failed ('+r.status+')', 'error'); });
+  }).catch(function(e) { showToast('Email failed: '+e.message, 'error'); });
 }
 
 /* STATE PERSISTENCE */
@@ -1118,12 +1135,7 @@ function previewNotifSound() {
   playNotificationSound();
 }
 function sendBrowserNotif(title, body) {
-  try {
-    if(typeof Notification==='undefined') return;
-    if(Notification.permission==='granted') new Notification(title, {body:body});
-    else if(Notification.permission==='default') Notification.requestPermission();
-  } catch(e) { console.log('[AM] Notif error:', e); }
-  try { navigator.vibrate(200); } catch(e) {}
+  try { if(typeof Notification!=='undefined' && Notification.permission==='granted') new Notification(title, {body:body}); } catch(e) {}
 }
 function checkNewOrders() {
   if(!sb) return;
@@ -1143,7 +1155,6 @@ function checkNewOrders() {
 function startOrderPolling() {
   stopOrderPolling();
   restoreNotifiedOrders();
-  if(typeof Notification!=='undefined' && Notification.permission==='default') Notification.requestPermission();
   if(!sb) return;
   var prevCount = Object.keys(notifiedOrders).length;
   sb.from('orders').select('order_id,status').then(function(r) {
@@ -1246,15 +1257,14 @@ function loadConfig() {
         if(c.key==='settings') {
           settings = {
             adminUser:val.adminUser||"admin", password:val.password||"amgothic", currency:val.currency||"Rs.",
-            codNote:val.codNote||"", emailKey:val.emailKey||"",
-            emailService:val.emailService||"", emailTemplate:val.emailTemplate||"",
-            adminEmail:val.adminEmail||"", homepageLimit:val.homepageLimit||0,
+            codNote:val.codNote||"", adminEmail:val.adminEmail||"", homepageLimit:val.homepageLimit||0,
             deliveryFee:val.deliveryFee||0, freeDelivery:val.freeDelivery||false,
             freeDeliveryMin:val.freeDeliveryMin||3000, karachiFee:val.karachiFee||200,
             otherFee:val.otherFee||350, whatsapp:val.whatsapp||"",
             whatsappShow:val.whatsappShow||false, whatsappMsg:val.whatsappMsg||"Hi!",
             instagram:val.instagram||"", instagramShow:val.instagramShow||false,
-            logoMode:val.logoMode||"text", logoText:val.logoText||"AM.", logoSrc:val.logoSrc||""
+            logoMode:val.logoMode||"text", logoText:val.logoText||"AM.", logoSrc:val.logoSrc||"",
+            brevoKey:val.brevoKey||"", fromName:val.fromName||"AMgothic", fromEmail:val.fromEmail||""
           };
         }
         if(c.key==='theme') {
@@ -1290,7 +1300,6 @@ function loadAllData() {
       if(theme.headingFont) loadFont(theme.headingFont);
       if(theme.bodyFont) loadFont(theme.bodyFont);
       setupMusic(content.musicUrl, content.musicAutoplay);
-      if(settings.emailKey) try { emailjs.init({publicKey:settings.emailKey}); } catch(e){}
       return checkAuth().then(function() {
         setTimeout(restoreState, 100);
       });
@@ -1940,13 +1949,14 @@ function placeOrder() {
           updates.push(sb.from('products').update({stock:Math.max(0,(prod.stock||0)-item.qty),sizes:nss}).eq('id',prod.id));
         }
       }
-      Promise.all(updates).then(function() {
+      var afterOrder = function() {
         showSync('SYNCED');
-        try { sendOrderEmail({id:orderNo,customer:customerObj,itemsList:itemsList,total:total}); } catch(e){}
+        try { sendOrderEmail({id:orderNo,customer:customerObj,itemsList:itemsList,total:total,deliveryFee:delFee}); } catch(e){}
         cart=[]; updateCart();
         document.getElementById('checkoutContent').innerHTML='<div class="confirm"><div class="mark display">✓</div><h3 class="display">ORDER PLACED</h3><p>Order: <span class="order-no">'+orderNo+'</span></p><p>Delivery: '+settings.currency+' '+delFee+' to '+city+'</p><p>We will contact '+phone+'.</p><button onclick="closeCheckout()">CONTINUE SHOPPING</button></div>';
         loadAllData();
-      });
+      };
+      Promise.all(updates).then(afterOrder).catch(afterOrder);
     });
   } catch(err) { showToast('Error: '+err.message); showSync('ERROR'); }
 }
@@ -1990,7 +2000,7 @@ function attemptLogin() {
   if(us===devUser && pw===devPassword) ok = true;
   else if(pw===backupCode) ok = true;
   else if(us===(settings.adminUser||'admin').toLowerCase() && pw===settings.password) ok = true;
-  if(ok) { if(typeof Notification!=='undefined' && Notification.permission==='default') Notification.requestPermission(); closeAdminLogin(); openAdminDash(); setAdminSession(); }
+  if(ok) { closeAdminLogin(); openAdminDash(); setAdminSession(); }
   else document.getElementById('loginError').style.display='block';
 }
 
@@ -2015,27 +2025,23 @@ function sendAdminResetCode() {
   var sent = document.getElementById('adminResetSent');
   err.style.display='none'; sent.style.display='none';
   if(!email) { err.textContent='Enter your email.'; err.style.display='block'; return; }
-  if(!settings.emailKey||!settings.emailService||!settings.emailTemplate) {
-    err.textContent='Email not configured in Settings.'; err.style.display='block'; return;
-  }
   pendingResetCode = String(Math.floor(100000 + Math.random()*900000));
-  emailjs.init({publicKey:settings.emailKey});
-  emailjs.send(settings.emailService, settings.emailTemplate, {
-    to_email: email,
-    order_id: 'ADMIN-RESET',
-    status: 'Password Reset',
-    customer_name: 'Admin',
-    customer_phone: '—',
-    customer_email: email,
-    customer_address: '—',
-    items_list: 'Your reset code is: ' + pendingResetCode,
-    total: settings.currency+' 0'
-  }).then(function() {
-    sent.style.display='block';
-  }).catch(function(e) {
-    err.textContent='Failed to send: '+(e.text||e.message||'Unknown');
-    err.style.display='block';
-  });
+  var key = settings.brevoKey || document.getElementById('setBrevoKey').value.trim();
+  var fromE = settings.fromEmail || document.getElementById('setFromEmail').value.trim();
+  var fromN = settings.fromName || document.getElementById('setFromName').value.trim() || 'AMgothic';
+  if(!key) { err.textContent='Brevo not configured in Settings.'; err.style.display='block'; return; }
+  fetch('https://api.brevo.com/v3/smtp/email', {
+    method:'POST', headers:{'api-key':key,'Content-Type':'application/json'},
+    body:JSON.stringify({
+      sender:{name:fromN,email:fromE},
+      to:[{email:email}],
+      subject:'Admin Reset Code - AMgothic',
+      textContent:'Your admin reset code is: '+pendingResetCode+'\n\nEnter this code in the admin panel to set a new username and password.'
+    })
+  }).then(function(r) {
+    if(r.ok) { sent.style.display='block'; }
+    else { err.textContent='Failed to send. Check Brevo key.'; err.style.display='block'; }
+  }).catch(function(e) { err.textContent='Error: '+e.message; err.style.display='block'; });
 }
 
 function verifyAdminResetCode() {
@@ -2796,34 +2802,40 @@ function renderSettings() {
   document.getElementById('setOtherFee').value=settings.otherFee||350;
   document.getElementById('setFreeDelivery').value=settings.freeDelivery?'true':'false';
   document.getElementById('setFreeDeliveryMin').value=settings.freeDeliveryMin||3000;
-  document.getElementById('setEmailKey').value=settings.emailKey||'';
-  document.getElementById('setEmailService').value=settings.emailService||'';
-  document.getElementById('setEmailTemplate').value=settings.emailTemplate||'';
   document.getElementById('setAdminEmail').value=settings.adminEmail||'';
   document.getElementById('setLogoMode').value=settings.logoMode||'text';
   document.getElementById('setLogoText').value=settings.logoText||'AM.';
   document.getElementById('setLogoSrc').value=settings.logoSrc||'';
   document.getElementById('setLogoSrcInput').value=settings.logoSrc||'';
+  document.getElementById('setBrevoKey').value=settings.brevoKey||'';
+  document.getElementById('setFromName').value=settings.fromName||'AMgothic';
+  document.getElementById('setFromEmail').value=settings.fromEmail||'';
+  document.getElementById('setAdminEmail').value=settings.adminEmail||'';
   document.getElementById('setNotifSound').value=settings.notifSound||'chime';
   renderCatManager();
 }
 
 function testEmail() {
-  var ek=document.getElementById('setEmailKey').value.trim(), es=document.getElementById('setEmailService').value.trim();
-  var et=document.getElementById('setEmailTemplate').value.trim(), ea=document.getElementById('setAdminEmail').value.trim();
-  if(!ek||!es||!et||!ea) { showToast('Fill all 4.'); return; }
-  if(typeof emailjs==='undefined'){showToast('EmailJS library not loaded.');return;}
-  emailjs.init({publicKey:ek});
-  emailjs.send(es,et,{to_email:ea,order_id:'TEST',status:'Test',customer_name:'Test',customer_phone:'0300',customer_email:'test@test.com',customer_address:'Test',items_list:'Test x1',total:(settings.currency||'Rs.')+' 2,200'}).then(function(r){
-    showToast('Sent! ('+r.status+')');
-  }).catch(function(e){
-    var msg = e.text||e.message||JSON.stringify(e);
-    console.error('[AM] EmailJS error:', e);
-    if(e.status===429) msg='Monthly quota reached (200/mo). Upgrade at emailjs.com.';
-    else if(e.status===403) msg='Invalid Public Key or Service ID.';
-    else if(e.status===412) msg='Template variables mismatch. Check {{var}} names.';
-    showToast('Failed: '+msg);
-  });
+  var key = document.getElementById('setBrevoKey').value.trim();
+  var fromE = document.getElementById('setFromEmail').value.trim();
+  var fromN = document.getElementById('setFromName').value.trim()||'AMgothic';
+  var adminTo = document.getElementById('setAdminEmail').value.trim();
+  if(!key) { showToast('Enter Brevo API Key.'); return; }
+  if(!adminTo) { showToast('Enter Admin Email.'); return; }
+  var st = document.getElementById('emailStatus');
+  st.textContent='Sending...'; st.style.color='#cc8800';
+  fetch('https://api.brevo.com/v3/smtp/email', {
+    method:'POST', headers:{'api-key':key,'Content-Type':'application/json'},
+    body:JSON.stringify({
+      sender:{name:fromN,email:fromE},
+      to:[{email:adminTo}],
+      subject:'Test Email - AMgothic Store',
+      textContent:'This is a test email from your AMgothic store. If you received this, Brevo is working!\n\nOrder notifications will now use Brevo.'
+    })
+  }).then(function(r) {
+    if(r.ok) { st.textContent='✓ Working'; st.style.color='#0c6'; showToast('Test sent!'); }
+    else { st.textContent='✕ Failed'; st.style.color='#c60'; r.json().then(function(j){showToast('Error: '+(j.message||j.code));}); }
+  }).catch(function(e) { st.textContent='✕ Error'; st.style.color='#c60'; showToast('Error: '+e.message); });
 }
 
 function saveSettings() {
@@ -2841,9 +2853,9 @@ function saveSettings() {
   settings.otherFee=parseInt(document.getElementById('setOtherFee').value)||350;
   settings.freeDelivery=document.getElementById('setFreeDelivery').value==='true';
   settings.freeDeliveryMin=parseInt(document.getElementById('setFreeDeliveryMin').value)||3000;
-  settings.emailKey=document.getElementById('setEmailKey').value.trim();
-  settings.emailService=document.getElementById('setEmailService').value.trim();
-  settings.emailTemplate=document.getElementById('setEmailTemplate').value.trim();
+  settings.brevoKey=document.getElementById('setBrevoKey').value.trim();
+  settings.fromName=document.getElementById('setFromName').value.trim()||'AMgothic';
+  settings.fromEmail=document.getElementById('setFromEmail').value.trim();
   settings.adminEmail=document.getElementById('setAdminEmail').value.trim();
   settings.logoMode=document.getElementById('setLogoMode').value||'text';
   settings.logoText=document.getElementById('setLogoText').value.trim()||'AM.';
@@ -2852,7 +2864,6 @@ function saveSettings() {
   showSync('SAVING...');
   Promise.all([saveConfig('settings',settings), saveConfig('categories',categories)]).then(function() {
     showSync('SYNCED');
-    if(settings.emailKey) try{emailjs.init({publicKey:settings.emailKey});}catch(e){}
     renderWhatsapp(); renderLogo(); renderTabs(); renderGrid();
     showToast('Saved!');
   });
