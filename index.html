@@ -153,6 +153,7 @@ section#shop{padding:80px 5vw;max-width:var(--max-w);margin:0 auto;}
 .card-visual img{width:100%;height:100%;object-fit:cover;transition:opacity .5s ease;}
 .card-visual .ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:.55rem;letter-spacing:.1em;text-transform:uppercase;color:#444;background:#0d0d0d;}
 .card-visual span.tag{position:absolute;top:10px;left:10px;font-family:var(--font-mono);font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;background:var(--accent);color:#fff;padding:4px 8px;z-index:2;}
+.sold-out{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.65);z-index:3;font-family:var(--font-heading);font-size:clamp(1rem,2.5vw,1.4rem);color:var(--blood);text-transform:uppercase;letter-spacing:.08em;text-shadow:var(--glow);}
 .card-dots{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);display:flex;gap:5px;z-index:2;}
 .card-dots span{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.3);}
 .card-dots span.active{background:var(--blood);}
@@ -1459,6 +1460,7 @@ function renderGrid() {
     var dots = imgs.length>1 ? '<div class="card-dots">'+imgs.map(function(_,i){return '<span class="'+(i===0?'active':'')+'"></span>';}).join('')+'</div>' : '';
     return '<div class="card" data-pid="'+p.id+'" onclick="openPDP('+p.id+')"><div class="card-visual">'+vis+
       (p.tag?'<span class="tag">'+p.tag+'</span>':'')+
+      ((p.stock||0)<=0||Object.values(p.sizes||{}).every(function(v){return !v;})?'<div class="sold-out">SOLD OUT</div>':'')+
       dots+'</div><div class="card-info"><h3>'+(p.name||'')+'</h3></div></div>';
   }).join('');
 }
@@ -1720,7 +1722,7 @@ function openPDP(id, isRestore) {
     (p.tag ? '<span class="pdp-tag">'+p.tag+'</span>' : '') +
     '<h1 class="pdp-name">'+p.name+'</h1>' +
     '<div class="pdp-price">'+cur+' '+Number(p.price||0).toLocaleString()+'</div>' +
-    '<div class="pdp-stock">'+(p.stock||0)+' LEFT</div>' +
+    '<div class="pdp-stock">'+(((p.stock||0)<=0||Object.values(p.sizes||{}).every(function(v){return !v;}))?'SOLD OUT':(p.stock||0)+' LEFT')+'</div>' +
     '<div class="pdp-desc">'+((p.desc||'').replace(/\n/g,'<br>'))+'</div>' +
     '<div class="pdp-size-section"><div class="pdp-size-head"><span>Select Size</span></div>' +
     '<div class="pdp-sizes">' + ['S','M','L','XL'].map(function(s) {
@@ -1728,7 +1730,7 @@ function openPDP(id, isRestore) {
       return '<button onclick="pdpPickSize(this,\''+s+'\','+q+')" '+(q<=0?'class="oos" disabled':'')+'>'+s+'<span class="sh">'+(q<=0?'SOLD OUT':q+' left')+'</span></button>';
     }).join('') + '</div></div>' +
     '<div class="pdp-qty"><label>Qty</label><div class="qty-controls"><button onclick="pdpChangeQty(-1)">-</button><span id="pdpQtyVal">1</span><button onclick="pdpChangeQty(1)">+</button></div></div>' +
-    '<button class="pdp-add-btn" id="pdpAddBtn" onclick="pdpConfirmAdd('+p.id+')" disabled>SELECT A SIZE</button>' +
+    '<button class="pdp-add-btn" id="pdpAddBtn" onclick="pdpConfirmAdd('+p.id+')" disabled>'+((p.stock||0)<=0||Object.values(p.sizes||{}).every(function(v){return !v;})?'SOLD OUT':'SELECT A SIZE')+'</button>' +
     '<hr class="pdp-divider">' +
     '<div class="pdp-sizechart"><h3>Size Chart</h3>' + sizeChartHTML + '</div>' +
     '</div>';
@@ -1811,6 +1813,7 @@ function renderExploreGrid() {
     var dots = imgs.length>1 ? '<div class="card-dots">'+imgs.map(function(_,i){return '<span class="'+(i===0?'active':'')+'"></span>';}).join('')+'</div>' : '';
     return '<div class="card" data-pid="'+p.id+'" onclick="openPDP('+p.id+')"><div class="card-visual">'+vis+
       (p.tag?'<span class="tag">'+p.tag+'</span>':'')+
+      ((p.stock||0)<=0||Object.values(p.sizes||{}).every(function(v){return !v;})?'<div class="sold-out">SOLD OUT</div>':'')+
       dots+'</div><div class="card-info"><h3>'+(p.name||'')+'</h3><span class="price">'+
       (settings.currency||'Rs.')+' '+Number(p.price||0).toLocaleString()+
       '</span><button class="add-btn" onclick="event.stopPropagation();openPDP('+p.id+')">Add to Bag</button></div></div>';
@@ -2453,6 +2456,7 @@ function saveProduct(id) {
   var cat=document.getElementById('eCat').value, tag=document.getElementById('eTag').value;
   var stock=parseInt(document.getElementById('eStock').value)||0, desc=document.getElementById('eDesc').value.trim();
   var sizes={S:parseInt(document.getElementById('eSS').value)||0,M:parseInt(document.getElementById('eSM').value)||0,L:parseInt(document.getElementById('eSL').value)||0,XL:parseInt(document.getElementById('eSXL').value)||0};
+  if(stock<=0) sizes={S:0,M:0,L:0,XL:0};
   var imgs=getMultiImgUrls('editImgGrid');
   if(!name||!price) { showToast('Name and price required.'); return; }
   showSync('SAVING...');
