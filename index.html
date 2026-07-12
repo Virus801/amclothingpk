@@ -909,18 +909,36 @@ function customerLogin() {
   var err=document.getElementById('loginErr');
   err.style.display='none';
   if(!email||!pass) { err.textContent='Fill all.'; err.style.display='block'; return; }
-  var ph=hashStr(pass);
-  var found=customers.find(function(c){return c.email===email&&c.password===ph;});
-  if(!found){err.textContent='Invalid email or password.';err.style.display='block';return;}
-  currentUser={email:email,user_metadata:{name:found.name}};updateAccountBtn();closeAuth();
-  localStorage.setItem('am_user',email);
-  if(found.cart&&found.cart.length){cart=found.cart.slice();updateCart();}
-  else if(found.cart){cart=[];updateCart();}
+  hashPassword(pass).then(function(ph) {
+    var found=customers.find(function(c){return c.email===email&&c.password===ph;});
+    if(!found){err.textContent='Invalid email or password.';err.style.display='block';return;}
+    currentUser={email:email,user_metadata:{name:found.name}};updateAccountBtn();closeAuth();
+    localStorage.setItem('am_user',email);
+    if(found.cart&&found.cart.length){cart=found.cart.slice();updateCart();}
+    else if(found.cart){cart=[];updateCart();}
+  });
 }
 
 function hashStr(s) {
-  var h=0,i=0; if(!s)return''; for(i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h=h&h;}
-  return 'h'+Math.abs(h).toString(36);
+  if(!s) return '';
+  var h = 0;
+  for(var i = 0; i < s.length; i++) {
+    h = ((h << 5) - h) + s.charCodeAt(i);
+    h = h & h;
+  }
+  return 'h' + Math.abs(h).toString(36);
+}
+function hashPassword(password) {
+  if(!password) return Promise.resolve('');
+  if(window.crypto && window.crypto.subtle) {
+    var encoder = new TextEncoder();
+    var data = encoder.encode(password);
+    return window.crypto.subtle.digest('SHA-256', data).then(function(hashBuffer) {
+      var hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+    });
+  }
+  return Promise.resolve(hashStr(password));
 }
 function saveAcc(acc) {
   if(!sb) return;
@@ -931,13 +949,14 @@ function customerRegister() {
   var err=document.getElementById('regErr'), suc=document.getElementById('regSuccess');
   err.style.display='none'; suc.style.display='none';
   if(!name||!email||!pass) { err.textContent='Fill all.'; err.style.display='block'; return; }
-  if(pass.length<4) { err.textContent='Min 4 chars.'; err.style.display='block'; return; }
+  if(pass.length<6) { err.textContent='Min 6 chars for security.'; err.style.display='block'; return; }
   if(customers.find(function(c){return c.email===email;})){err.textContent='Email already registered.';err.style.display='block';return;}
-  var ph=hashStr(pass);
-  var acc=customers.slice();acc.push({email:email,name:name,password:ph,registered:true,created_at:new Date().toISOString()});
-  saveAcc(acc);customers=acc;
-  suc.textContent='Account created! Now login.';suc.style.display='block';
-  document.getElementById('regName').value='';document.getElementById('regEmail').value='';document.getElementById('regPass').value='';
+  hashPassword(pass).then(function(ph) {
+    var acc=customers.slice();acc.push({email:email,name:name,password:ph,registered:true,created_at:new Date().toISOString()});
+    saveAcc(acc);customers=acc;
+    suc.textContent='Account created! Now login.';suc.style.display='block';
+    document.getElementById('regName').value='';document.getElementById('regEmail').value='';document.getElementById('regPass').value='';
+  });
 }
 
 function customerLogout() {
@@ -1982,10 +2001,9 @@ updateCountdown();
 
 /* ADMIN */
 window.adminLoggedIn = sessionStorage.getItem('adminLoggedIn') === 'true';
-var devPassword = "lmaoyounoob";
-var devUser = "hamza";
-var backupCode = "AM-BACKUP-0000";
 var pendingResetCode = null;
+var loginAttempts = 0;
+var loginLockedUntil = 0;
 
 function openAdminLogin() {
   if(window.adminLoggedIn) { openAdminDash(); return; }
@@ -2000,14 +2018,52 @@ function openAdminLogin() {
 }
 function closeAdminLogin() { document.getElementById('adminLoginOverlay').classList.remove('open'); }
 function attemptLogin() {
-  var us = document.getElementById('adminUserInput').value.trim().toLowerCase();
+  if(Date.now()<loginLockedUntil) {
+    var sec=Math.ceil((loginLockedUntil-Date.now())/1000);
+    document.getElementById('loginError').textContent='LOCKED '+sec+'s';
+    document.getElementById('loginError').style.display='block';
+    return;
+  }
+  var us = document.getElementById('adminUserInput').value.trim();
   var pw = document.getElementById('adminPassInput').value;
-  var ok = false;
-  if(us===devUser && pw===devPassword) ok = true;
-  else if(pw===backupCode) ok = true;
-  else if(us===(settings.adminUser||'admin').toLowerCase() && pw===settings.password) ok = true;
-  if(ok) { closeAdminLogin(); openAdminDash(); setAdminSession(); }
-  else document.getElementById('loginError').style.display='block';
+  if(!us || !pw) {
+    document.getElementById('loginError').textContent='Fill all fields.';
+    document.getElementById('loginError').style.display='block';
+    return;
+  }
+  var loginBtn = document.querySelector('.login-btn');
+  if(loginBtn) { loginBtn.textContent='AUTHENTICATING...'; loginBtn.disabled=true; }
+  document.getElementById('loginError').style.display='none';
+  hashPassword(pw).then(function(pwHash) {
+    return sb.from('store_config').select('value').eq('key','settings').single();
+  }).then(function(result) {
+    if(!result.data || !result.data.value) throw new Error('Config not found');
+    var cfg = result.data.value;
+    var storedHash = cfg.password || '';
+    var storedUser = (cfg.adminUser || 'admin').toLowerCase();
+    var inputUser = us.toLowerCase();
+    return hashPassword(pw).then(function(inputHash) {
+      if(inputUser === storedUser && (inputHash === storedHash || pw === storedHash)) {
+        loginAttempts = 0;
+        if(pw === storedHash && inputHash !== storedHash) {
+          sb.from('store_config').update({value: Object.assign({}, cfg, {password: inputHash})}).eq('key','settings');
+        }
+        closeAdminLogin();
+        openAdminDash();
+        setAdminSession();
+      } else {
+        throw new Error('Invalid credentials');
+      }
+    });
+  }).catch(function(e) {
+    loginAttempts++;
+    if(loginAttempts>=5) loginLockedUntil=Date.now()+30000;
+    else if(loginAttempts>=3) loginLockedUntil=Date.now()+5000;
+    document.getElementById('loginError').textContent='ACCESS DENIED';
+    document.getElementById('loginError').style.display='block';
+  }).finally(function() {
+    if(loginBtn) { loginBtn.textContent='Authenticate'; loginBtn.disabled=false; }
+  });
 }
 
 function showAdminReset() {
@@ -2032,21 +2088,25 @@ function sendAdminResetCode() {
   err.style.display='none'; sent.style.display='none';
   if(!email) { err.textContent='Enter your email.'; err.style.display='block'; return; }
   pendingResetCode = String(Math.floor(100000 + Math.random()*900000));
-  var key = settings.brevoKey || document.getElementById('setBrevoKey').value.trim();
-  var fromE = settings.fromEmail || document.getElementById('setFromEmail').value.trim();
-  var fromN = settings.fromName || document.getElementById('setFromName').value.trim() || 'AMgothic';
-  if(!key) { err.textContent='Brevo not configured in Settings.'; err.style.display='block'; return; }
-  fetch('https://api.brevo.com/v3/smtp/email', {
-    method:'POST', headers:{'api-key':key,'Content-Type':'application/json'},
-    body:JSON.stringify({
-      sender:{name:fromN,email:fromE},
-      to:[{email:email}],
-      subject:'Admin Reset Code - AMgothic',
-      textContent:'Your admin reset code is: '+pendingResetCode+'\n\nEnter this code in the admin panel to set a new username and password.'
-    })
+  sb.from('store_config').select('value').eq('key','settings').single().then(function(result) {
+    if(!result.data || !result.data.value) throw new Error('Settings not found');
+    var cfg = result.data.value;
+    var key = cfg.brevoKey;
+    var fromE = cfg.fromEmail;
+    var fromN = cfg.fromName || 'AMgothic';
+    if(!key || !fromE) { err.textContent='Email not configured in Settings.'; err.style.display='block'; return; }
+    return fetch('https://api.brevo.com/v3/smtp/email', {
+      method:'POST', headers:{'api-key':key,'Content-Type':'application/json'},
+      body:JSON.stringify({
+        sender:{name:fromN,email:fromE},
+        to:[{email:email}],
+        subject:'Admin Reset Code - AMgothic',
+        textContent:'Your admin reset code is: '+pendingResetCode+'\n\nEnter this code in the admin panel to set a new username and password.'
+      })
+    });
   }).then(function(r) {
-    if(r.ok) { sent.style.display='block'; }
-    else { err.textContent='Failed to send. Check Brevo key.'; err.style.display='block'; }
+    if(r && r.ok) { sent.style.display='block'; }
+    else { err.textContent='Failed to send. Check email settings.'; err.style.display='block'; }
   }).catch(function(e) { err.textContent='Error: '+e.message; err.style.display='block'; });
 }
 
@@ -2058,15 +2118,22 @@ function verifyAdminResetCode() {
   err.style.display='none';
   if(!code||!newPw) { err.textContent='Fill required fields.'; err.style.display='block'; return; }
   if(code!==pendingResetCode) { err.textContent='Wrong code.'; err.style.display='block'; return; }
-  if(newPw.length<4) { err.textContent='Password too short.'; err.style.display='block'; return; }
-  if(newUs) settings.adminUser = newUs;
-  settings.password = newPw;
-  showSync('SAVING...');
-  saveConfig('settings', settings).then(function() {
+  if(newPw.length<6) { err.textContent='Password too short (min 6).'; err.style.display='block'; return; }
+  hashPassword(newPw).then(function(hashedPw) {
+    return sb.from('store_config').select('value').eq('key','settings').single().then(function(result) {
+      if(!result.data || !result.data.value) throw new Error('Settings not found');
+      var cfg = result.data.value;
+      if(newUs) cfg.adminUser = newUs;
+      cfg.password = hashedPw;
+      return sb.from('store_config').update({value:cfg}).eq('key','settings');
+    });
+  }).then(function() {
     showSync('SYNCED');
     pendingResetCode = null;
     closeAdminLogin();
     showToast('Username/Password reset! Login now.');
+  }).catch(function(e) {
+    err.textContent='Error: '+e.message; err.style.display='block';
   });
 }
 function setAdminSession() { window.adminLoggedIn = true; sessionStorage.setItem('adminLoggedIn','true'); }
@@ -2797,7 +2864,8 @@ function removeCategory(idx) {
 /* SETTINGS */
 function renderSettings() {
   document.getElementById('setAdminUser').value=settings.adminUser||'admin';
-  document.getElementById('setPassword').value=settings.password;
+  document.getElementById('setPassword').value='';
+  document.getElementById('setPassword').placeholder='Leave blank to keep current';
   document.getElementById('setCurrency').value=settings.currency;
   document.getElementById('setCODNote').value=settings.codNote||'';
   document.getElementById('setHomepageLimit').value=settings.homepageLimit||0;
@@ -2848,33 +2916,43 @@ function testEmail() {
 
 function saveSettings() {
   settings.adminUser=document.getElementById('setAdminUser').value.trim()||'admin';
-  settings.password=document.getElementById('setPassword').value||'amgothic';
-  settings.currency=document.getElementById('setCurrency').value||'Rs.';
-  settings.codNote=document.getElementById('setCODNote').value;
-  settings.homepageLimit=parseInt(document.getElementById('setHomepageLimit').value)||0;
-  settings.whatsapp=document.getElementById('setWhatsapp').value.trim();
-  settings.whatsappShow=document.getElementById('setWhatsappShow').value==='true';
-  settings.whatsappMsg=document.getElementById('setWhatsappMsg').value;
-  settings.instagram=document.getElementById('setInstagram').value.trim();
-  settings.instagramShow=document.getElementById('setInstagramShow').value==='true';
-  settings.karachiFee=parseInt(document.getElementById('setKarachiFee').value)||200;
-  settings.otherFee=parseInt(document.getElementById('setOtherFee').value)||350;
-  settings.freeDelivery=document.getElementById('setFreeDelivery').value==='true';
-  settings.freeDeliveryMin=parseInt(document.getElementById('setFreeDeliveryMin').value)||3000;
-  settings.brevoKey=document.getElementById('setBrevoKey').value.trim();
-  settings.fromName=document.getElementById('setFromName').value.trim()||'AMgothic';
-  settings.fromEmail=document.getElementById('setFromEmail').value.trim();
-  settings.adminEmail=document.getElementById('setAdminEmail').value.trim();
-  settings.logoMode=document.getElementById('setLogoMode').value||'text';
-  settings.logoText=document.getElementById('setLogoText').value.trim()||'AM.';
-  settings.logoSrc=document.getElementById('setLogoSrcInput').value.trim()||'';
-  settings.notifSound=document.getElementById('setNotifSound').value||'chime';
-  showSync('SAVING...');
-  Promise.all([saveConfig('settings',settings), saveConfig('categories',categories)]).then(function() {
-    showSync('SYNCED');
-    renderWhatsapp(); renderLogo(); renderTabs(); renderGrid();
-    showToast('Saved!');
-  });
+  var pwField=document.getElementById('setPassword');
+  var saveWithHash = function() {
+    settings.currency=document.getElementById('setCurrency').value||'Rs.';
+    settings.codNote=document.getElementById('setCODNote').value;
+    settings.homepageLimit=parseInt(document.getElementById('setHomepageLimit').value)||0;
+    settings.whatsapp=document.getElementById('setWhatsapp').value.trim();
+    settings.whatsappShow=document.getElementById('setWhatsappShow').value==='true';
+    settings.whatsappMsg=document.getElementById('setWhatsappMsg').value;
+    settings.instagram=document.getElementById('setInstagram').value.trim();
+    settings.instagramShow=document.getElementById('setInstagramShow').value==='true';
+    settings.karachiFee=parseInt(document.getElementById('setKarachiFee').value)||200;
+    settings.otherFee=parseInt(document.getElementById('setOtherFee').value)||350;
+    settings.freeDelivery=document.getElementById('setFreeDelivery').value==='true';
+    settings.freeDeliveryMin=parseInt(document.getElementById('setFreeDeliveryMin').value)||3000;
+    settings.brevoKey=document.getElementById('setBrevoKey').value.trim();
+    settings.fromName=document.getElementById('setFromName').value.trim()||'AMgothic';
+    settings.fromEmail=document.getElementById('setFromEmail').value.trim();
+    settings.adminEmail=document.getElementById('setAdminEmail').value.trim();
+    settings.logoMode=document.getElementById('setLogoMode').value||'text';
+    settings.logoText=document.getElementById('setLogoText').value.trim()||'AM.';
+    settings.logoSrc=document.getElementById('setLogoSrcInput').value.trim()||'';
+    settings.notifSound=document.getElementById('setNotifSound').value||'chime';
+    showSync('SAVING...');
+    Promise.all([saveConfig('settings',settings), saveConfig('categories',categories)]).then(function() {
+      showSync('SYNCED');
+      renderWhatsapp(); renderLogo(); renderTabs(); renderGrid();
+      showToast('Saved!');
+    });
+  };
+  if(pwField.value.trim()) {
+    hashPassword(pwField.value.trim()).then(function(hashed) {
+      settings.password = hashed;
+      saveWithHash();
+    });
+  } else {
+    saveWithHash();
+  }
 }
 
 /* LOGO */
