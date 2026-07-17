@@ -835,7 +835,7 @@ function closeSidePanel() {
 function renderSidePanel() {
   document.getElementById('spCategories').innerHTML = '<h4>Categories</h4>' +
     categories.map(function(c) {
-      return '<a href="#shop" onclick="setCategory(\'' + c.key + '\');closeSidePanel();">' + c.label + '</a>';
+      return '<a href="javascript:void(0)" onclick="sidePanelCatClick(\'' + c.key + '\')">' + c.label + '</a>';
     }).join('');
 
   if(deals && deals.length) {
@@ -1515,6 +1515,14 @@ function renderGrid() {
 }
 
 function setCategory(c) { currentCategory=c; renderTabs(); renderGrid(); closeSidePanel(); saveState(); }
+function sidePanelCatClick(c) {
+  closeSidePanel();
+  if(document.getElementById('exploreOverlay').classList.contains('open')) {
+    setExploreCat(c);
+  } else {
+    setCategory(c);
+  }
+}
 function setSort(v) { currentSort=v; renderGrid(); }
 
 /* REVIEWS */
